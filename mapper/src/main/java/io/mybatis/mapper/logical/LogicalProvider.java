@@ -1,12 +1,16 @@
 package io.mybatis.mapper.logical;
 
 import io.mybatis.common.util.Assert;
+import io.mybatis.mapper.optimistic.OptimisticProvider;
 import io.mybatis.provider.EntityColumn;
 import io.mybatis.provider.EntityTable;
 import io.mybatis.provider.SqlScript;
 import org.apache.ibatis.builder.annotation.ProviderContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static io.mybatis.mapper.example.ExampleProvider.EXAMPLE_WHERE_CLAUSE;
@@ -20,7 +24,9 @@ import static io.mybatis.mapper.example.ExampleProvider.UPDATE_BY_EXAMPLE_WHERE_
  */
 public class LogicalProvider {
 
-  private interface LogicalSqlScript extends SqlScript {
+  private static final Logger log = LoggerFactory.getLogger(LogicalProvider.class);
+
+  public interface LogicalSqlScript extends SqlScript {
     // TODO: 复用ExampleProvider中的常量，将此常量去除
     String EXAMPLE_SET_CLAUSE_INNER_WHEN =
         "<set>" +
@@ -38,6 +44,9 @@ public class LogicalProvider {
 
     default String logicalNotEqualCondition(EntityTable entity) {
       EntityColumn logicalColumn = getLogicalColumn(entity);
+      if (Objects.isNull(logicalColumn)) {
+        return "";
+      }
       return " AND " + columnNotEqualsValueCondition(logicalColumn, deleteValue(logicalColumn)) + LF;
     }
   }
@@ -385,13 +394,16 @@ public class LogicalProvider {
 
   /* delete --- */
 
-  private static EntityColumn getLogicalColumn(EntityTable entity) {
+  public static EntityColumn getLogicalColumn(EntityTable entity) {
     List<EntityColumn> logicColumns = entity.columns().stream().filter(c -> c.field().isAnnotationPresent(LogicalColumn.class)).collect(Collectors.toList());
-    Assert.isTrue(logicColumns.size() == 1, "There are no or multiple fields marked with @LogicalColumn");
+    if (logicColumns.size() != 1) {
+      log.warn("There are no or multiple fields marked with @LogicalColumn");
+      return null;
+    }
     return logicColumns.get(0);
   }
 
-  private static String deleteValue(EntityColumn logicColumn) {
+  public static String deleteValue(EntityColumn logicColumn) {
     return logicColumn.field().getAnnotation(LogicalColumn.class).delete();
   }
 
@@ -399,7 +411,7 @@ public class LogicalProvider {
     return " " + c.column() + choiceEqualsOperator(value) + value + " ";
   }
 
-  private static String columnEqualsValue(EntityColumn c, String value) {
+  public static String columnEqualsValue(EntityColumn c, String value) {
     return " " + c.column() + " = " + value + " ";
   }
 
