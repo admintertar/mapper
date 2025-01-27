@@ -1,5 +1,6 @@
 package io.mybatis.mapper.optimistic;
 
+import io.mybatis.mapper.example.Example;
 import io.mybatis.mapper.fn.Fn;
 import io.mybatis.mapper.logical.LogicalMapper;
 import io.mybatis.mapper.logical.LogicalProvider;
@@ -45,5 +46,15 @@ public interface OptimisticMapper<T, I extends Serializable> extends LogicalMapp
   @Lang(Caching.class)
   @UpdateProvider(type = OptimisticProvider.class, method = "updateByPrimaryKeySelective")
   <S extends T> int updateByPrimaryKeySelective(S entity);
+
+  @Override
+  @Lang(Caching.class)
+  @UpdateProvider(type = OptimisticProvider.class, method = "updateByExample")
+  <S extends T> int updateByExample(@Param("entity") S entity, @Param("example") Example<T> example);
+
+  @Override
+  @Lang(Caching.class)
+  @UpdateProvider(type = OptimisticProvider.class, method = "updateByExampleSelective")
+  <S extends T> int updateByExampleSelective(@Param("entity") S entity, @Param("example") Example<T> example);
 
 }

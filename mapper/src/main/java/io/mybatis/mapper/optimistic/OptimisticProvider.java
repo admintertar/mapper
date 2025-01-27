@@ -1,5 +1,6 @@
 package io.mybatis.mapper.optimistic;
 
+import io.mybatis.mapper.example.ExampleProvider;
 import io.mybatis.mapper.logical.LogicalColumn;
 import io.mybatis.mapper.logical.LogicalProvider;
 import io.mybatis.provider.EntityColumn;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -22,6 +24,16 @@ public class OptimisticProvider {
 
   private static final Logger log = LoggerFactory.getLogger(OptimisticProvider.class);
 
+  public interface OptimisticSqlScript extends SqlScript {
+    default String logicalNotEqualCondition(EntityTable entity) {
+      EntityColumn logicalColumn = getLogicalColumn(entity);
+      if (Objects.isNull(logicalColumn)) {
+        return "";
+      }
+      return " AND " + LogicalProvider.columnNotEqualsValueCondition(logicalColumn, LogicalProvider.deleteValue(logicalColumn)) + LF;
+    }
+  }
+
   /**
    * 根据主键更新实体中不为空的字段，强制字段不区分是否null，都更新
    *
@@ -29,7 +41,7 @@ public class OptimisticProvider {
    * @return cacheKey
    */
   public static String updateByPrimaryKeySelectiveWithForceFields(ProviderContext providerContext) {
-    return SqlScript.caching(providerContext, new LogicalProvider.LogicalSqlScript() {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
 
       @Override
       public String getSql(EntityTable entity) {
@@ -71,7 +83,7 @@ public class OptimisticProvider {
    */
   public static String deleteByPrimaryKey(ProviderContext providerContext) {
 
-    return SqlScript.caching(providerContext, new LogicalProvider.LogicalSqlScript() {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
           @Override
           public String getSql(EntityTable entity) {
             EntityColumn logicColumn = getLogicalColumn(entity);
@@ -104,7 +116,7 @@ public class OptimisticProvider {
    * @return cacheKey
    */
   public static String delete(ProviderContext providerContext) {
-    return SqlScript.caching(providerContext, new LogicalProvider.LogicalSqlScript() {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
       @Override
       public String getSql(EntityTable entity) {
         EntityColumn logicColumn = getLogicalColumn(entity);
@@ -134,7 +146,7 @@ public class OptimisticProvider {
    * @return cacheKey
    */
   public static String updateByPrimaryKey(ProviderContext providerContext) {
-    return SqlScript.caching(providerContext, new LogicalProvider.LogicalSqlScript() {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
       @Override
       public String getSql(EntityTable entity) {
 
@@ -165,7 +177,7 @@ public class OptimisticProvider {
    * @return cacheKey
    */
   public static String updateByPrimaryKeySelective(ProviderContext providerContext) {
-    return SqlScript.caching(providerContext, new LogicalProvider.LogicalSqlScript() {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
       @Override
       public String getSql(EntityTable entity) {
 
@@ -189,6 +201,83 @@ public class OptimisticProvider {
       }
     });
   }
+
+
+  /**
+   * 根据 Example 条件批量更新实体信息
+   *
+   * @param providerContext 上下文
+   * @return cacheKey
+   */
+  public static String updateByExample(ProviderContext providerContext) {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
+      @Override
+      public String getSql(EntityTable entity) {
+
+        EntityColumn optimistic = isOptimistic(entity.updateColumns());
+
+        return ifTest("example.startSql != null and example.startSql != ''", () -> "${example.startSql}")
+            + "UPDATE " + entity.tableName()
+            + set(() -> entity.updateColumns().stream().map(column -> {
+          if (isVersionColumn(column)) {
+            return columnEqualsPropertyVersion(column);
+          }
+          return column.columnEqualsProperty("entity.");
+        }).collect(Collectors.joining(",")))
+            + variableNotNull("example", "Example cannot be null")
+            //是否允许空条件，默认允许，允许时不检查查询条件
+            + (entity.getPropBoolean("updateByExample.allowEmpty", true) ?
+            "" : variableIsFalse("example.isEmpty()", "Example Criteria cannot be empty"))
+            + trim("WHERE", "", "WHERE |OR |AND ", "", () -> {
+          String whereSql = ExampleProvider.UPDATE_BY_EXAMPLE_WHERE_CLAUSE + logicalNotEqualCondition(entity);
+          if (optimistic != null) {
+            whereSql = whereSql + " AND " + optimistic.columnEqualsProperty("entity.");
+          }
+          return whereSql;
+        })
+            + ifTest("example.endSql != null and example.endSql != ''", () -> "${example.endSql}");
+      }
+    });
+  }
+
+  /**
+   * 根据 Example 条件批量更新实体不为空的字段
+   *
+   * @param providerContext 上下文
+   * @return cacheKey
+   */
+  public static String updateByExampleSelective(ProviderContext providerContext) {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
+      @Override
+      public String getSql(EntityTable entity) {
+
+        EntityColumn optimistic = isOptimistic(entity.updateColumns());
+
+        return ifTest("example.startSql != null and example.startSql != ''", () -> "${example.startSql}")
+            + "UPDATE " + entity.tableName()
+            + set(() -> entity.updateColumns().stream().map(
+            column -> {
+              if (isVersionColumn(column)) {
+                return columnEqualsPropertyVersion(column);
+              }
+              return ifTest(column.notNullTest("entity."), () -> column.columnEqualsProperty("entity.") + ",");
+            }).collect(Collectors.joining(LF)))
+            + variableNotNull("example", "Example cannot be null")
+            //是否允许空条件，默认允许，允许时不检查查询条件
+            + (entity.getPropBoolean("updateByExampleSelective.allowEmpty", true) ?
+            "" : variableIsFalse("example.isEmpty()", "Example Criteria cannot be empty"))
+            + trim("WHERE", "", "WHERE |OR |AND ", "", () -> {
+          String whereSql = ExampleProvider.UPDATE_BY_EXAMPLE_WHERE_CLAUSE + logicalNotEqualCondition(entity);
+          if (optimistic != null) {
+            whereSql = whereSql + " AND " + optimistic.columnEqualsProperty("entity.");
+          }
+          return whereSql;
+        })
+            + ifTest("example.endSql != null and example.endSql != ''", () -> "${example.endSql}");
+      }
+    });
+  }
+
 
   /**
    * 返回version的update字段

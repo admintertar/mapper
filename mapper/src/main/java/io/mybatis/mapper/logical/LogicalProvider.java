@@ -44,9 +44,6 @@ public class LogicalProvider {
 
     default String logicalNotEqualCondition(EntityTable entity) {
       EntityColumn logicalColumn = getLogicalColumn(entity);
-      if (Objects.isNull(logicalColumn)) {
-        return "";
-      }
       return " AND " + columnNotEqualsValueCondition(logicalColumn, deleteValue(logicalColumn)) + LF;
     }
   }
@@ -396,10 +393,7 @@ public class LogicalProvider {
 
   public static EntityColumn getLogicalColumn(EntityTable entity) {
     List<EntityColumn> logicColumns = entity.columns().stream().filter(c -> c.field().isAnnotationPresent(LogicalColumn.class)).collect(Collectors.toList());
-    if (logicColumns.size() != 1) {
-      log.warn("There are no or multiple fields marked with @LogicalColumn");
-      return null;
-    }
+    Assert.isTrue(logicColumns.size() == 1, "There are no or multiple fields marked with @LogicalColumn");
     return logicColumns.get(0);
   }
 
@@ -415,7 +409,7 @@ public class LogicalProvider {
     return " " + c.column() + " = " + value + " ";
   }
 
-  private static String columnNotEqualsValueCondition(EntityColumn c, String value) {
+  public static String columnNotEqualsValueCondition(EntityColumn c, String value) {
     return " " + c.column() + choiceNotEqualsOperator(value) + value;
   }
 
