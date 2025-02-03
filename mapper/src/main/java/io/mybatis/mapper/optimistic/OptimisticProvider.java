@@ -278,6 +278,45 @@ public class OptimisticProvider {
     });
   }
 
+  /**
+   * 根据对象值查询
+   * @param providerContext
+   * @return
+   */
+  public static String select(ProviderContext providerContext) {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
+      @Override
+      public String getSql(EntityTable entity) {
+        return "SELECT " + entity.baseColumnAsPropertyList()
+            + " FROM " + entity.tableName()
+            + where(() -> entity.whereColumns().stream()
+            .map(column -> ifTest(column.notNullTest(), () -> "AND " + column.columnEqualsProperty()))
+            .collect(Collectors.joining(LF)) + logicalNotEqualCondition(entity))
+            + entity.groupByColumn().orElse("")
+            + entity.havingColumn().orElse("")
+            + entity.orderByColumn().orElse("");
+      }
+    });
+  }
+
+  /**
+   * 根据实体字段条件查询总数
+   *
+   * @param providerContext 上下文
+   * @return cacheKey
+   */
+  public static String selectCount(ProviderContext providerContext) {
+    return SqlScript.caching(providerContext, new OptimisticSqlScript() {
+      @Override
+      public String getSql(EntityTable entity) {
+        return "SELECT COUNT(*)  FROM " + entity.tableName() + LF
+            + where(() ->
+            entity.whereColumns().stream().map(column ->
+                ifTest(column.notNullTest(), () -> "AND " + column.columnEqualsProperty())
+            ).collect(Collectors.joining(LF)) + logicalNotEqualCondition(entity));
+      }
+    });
+  }
 
   /**
    * 返回version的update字段

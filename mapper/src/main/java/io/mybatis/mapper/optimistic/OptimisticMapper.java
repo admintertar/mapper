@@ -2,13 +2,14 @@ package io.mybatis.mapper.optimistic;
 
 import io.mybatis.mapper.example.Example;
 import io.mybatis.mapper.fn.Fn;
+import io.mybatis.mapper.list.ListMapper;
 import io.mybatis.mapper.logical.LogicalMapper;
-import io.mybatis.mapper.logical.LogicalProvider;
 import io.mybatis.provider.Caching;
 import org.apache.ibatis.annotations.*;
+import org.apache.ibatis.cursor.Cursor;
 
 import java.io.Serializable;
-import java.util.Optional;
+import java.util.List;
 
 /**
  * 乐观锁Mapper
@@ -18,7 +19,7 @@ import java.util.Optional;
  * @version 1.0
  * @date 2025/1/23 11:16
  */
-public interface OptimisticMapper<T, I extends Serializable> extends LogicalMapper<T, I> {
+public interface OptimisticMapper<T, I extends Serializable> extends LogicalMapper<T, I>, ListMapper<T> {
   /* BaseMapper +++ */
 
   @Override
@@ -56,5 +57,20 @@ public interface OptimisticMapper<T, I extends Serializable> extends LogicalMapp
   @Lang(Caching.class)
   @UpdateProvider(type = OptimisticProvider.class, method = "updateByExampleSelective")
   <S extends T> int updateByExampleSelective(@Param("entity") S entity, @Param("example") Example<T> example);
+
+  @Override
+  @Lang(Caching.class)
+  @SelectProvider(type = OptimisticProvider.class, method = "select")
+  List<T> selectList(T entity);
+
+  @Override
+  @Lang(Caching.class)
+  @SelectProvider(type = OptimisticProvider.class, method = "selectCount")
+  long selectCount(T entity);
+
+  @Override
+  @Lang(Caching.class)
+  @SelectProvider(type = OptimisticProvider.class, method = "select")
+  Cursor<T> selectCursor(T entity);
 
 }
